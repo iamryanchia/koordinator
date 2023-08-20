@@ -21,7 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
+	v1alpha2 "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 	"k8s.io/klog/v2"
 
 	"github.com/koordinator-sh/koordinator/apis/runtime/v1alpha1"
@@ -65,9 +66,13 @@ func (c *ContainerResourceExecutor) loadContainerInfoFromStore(containerID, stag
 }
 
 func (c *ContainerResourceExecutor) ParseRequest(req interface{}) (utils.CallHookPluginOperation, error) {
-	var err error
+	req, err := V1alpha2ToV1(req)
+	if err != nil {
+		return utils.Unknown, err
+	}
+
 	switch request := req.(type) {
-	case *runtimeapi.CreateContainerRequest:
+	case *v1.CreateContainerRequest:
 		// get the pod info from local store
 		podID := request.GetPodSandboxId()
 		podCheckPoint := store.GetPodSandboxInfo(podID)
@@ -92,15 +97,15 @@ func (c *ContainerResourceExecutor) ParseRequest(req interface{}) (utils.CallHoo
 			},
 		}
 		klog.Infof("success parse container info %v during container create", c)
-	case *runtimeapi.StartContainerRequest:
+	case *v1.StartContainerRequest:
 		err = c.loadContainerInfoFromStore(request.GetContainerId(), "StartContainer")
-	case *runtimeapi.UpdateContainerResourcesRequest:
+	case *v1.UpdateContainerResourcesRequest:
 		err = c.loadContainerInfoFromStore(request.GetContainerId(), "UpdateContainerResource")
 		if err != nil {
 			break
 		}
 		c.ContainerResources = updateResourceByUpdateContainerResourceRequest(c.ContainerResources, transferToKoordResources(request.Linux))
-	case *runtimeapi.StopContainerRequest:
+	case *v1.StopContainerRequest:
 		err = c.loadContainerInfoFromStore(request.GetContainerId(), "StopContainer")
 	}
 	if err != nil {
@@ -112,7 +117,7 @@ func (c *ContainerResourceExecutor) ParseRequest(req interface{}) (utils.CallHoo
 	return utils.ShouldCallHookPlugin, nil
 }
 
-func (c *ContainerResourceExecutor) ParseContainer(container *runtimeapi.Container) error {
+func (c *ContainerResourceExecutor) ParseContainer(container *v1.Container) error {
 	if container == nil {
 		return nil
 	}
@@ -139,9 +144,14 @@ func (c *ContainerResourceExecutor) ParseContainer(container *runtimeapi.Contain
 }
 
 func (c *ContainerResourceExecutor) ResourceCheckPoint(rsp interface{}) error {
+	rsp, err := V1alpha2ToV1(rsp)
+	if err != nil {
+		return err
+	}
+
 	// container level resource checkpoint would be triggered during post container create only
 	switch response := rsp.(type) {
-	case *runtimeapi.CreateContainerResponse:
+	case *v1.CreateContainerResponse:
 		c.ContainerMeta.Id = response.GetContainerId()
 		err := store.WriteContainerInfo(response.GetContainerId(), &c.ContainerInfo)
 		if err != nil {
@@ -156,8 +166,13 @@ func (c *ContainerResourceExecutor) ResourceCheckPoint(rsp interface{}) error {
 }
 
 func (c *ContainerResourceExecutor) DeleteCheckpointIfNeed(req interface{}) error {
+	req, err := V1alpha2ToV1(req)
+	if err != nil {
+		return err
+	}
+
 	switch request := req.(type) {
-	case *runtimeapi.StopContainerRequest:
+	case *v1.StopContainerRequest:
 		store.DeleteContainerInfo(request.GetContainerId())
 	}
 	return nil
@@ -182,23 +197,49 @@ func (c *ContainerResourceExecutor) UpdateRequest(rsp interface{}, req interface
 
 	// update CRI request
 	switch request := req.(type) {
-	case *runtimeapi.CreateContainerRequest:
+	case *v1alpha2.CreateContainerRequest:
 		if c.ContainerAnnotations != nil {
 			request.Config.Annotations = c.ContainerAnnotations
 		}
 		if c.ContainerResources != nil {
-			request.Config.Linux.Resources = transferToCRIResources(c.ContainerResources)
+			request.Config.Linux.Resources = transferToCRIV1alpha2Resources(c.ContainerResources)
 		}
 		if c.PodCgroupParent != "" {
 			request.SandboxConfig.Linux.CgroupParent = c.PodCgroupParent
 		}
-		request.Config.Envs = transferToCRIContainerEnvs(c.ContainerEnvs)
-	case *runtimeapi.UpdateContainerResourcesRequest:
+		request.Config.Envs = transferToCRIV1alpha2ContainerEnvs(c.ContainerEnvs)
+	case *v1alpha2.UpdateContainerResourcesRequest:
 		if c.ContainerAnnotations != nil {
 			request.Annotations = c.ContainerAnnotations
 		}
 		if c.ContainerResources != nil {
-			request.Linux = transferToCRIResources(c.ContainerResources)
+			request.Linux = transferToCRIV1alpha2Resources(c.ContainerResources)
+		}
+	case *v1.CreateContainerRequest:
+		if c.ContainerAnnotations != nil {
+			request.Config.Annotations = c.ContainerAnnotations
+		}
+		if c.ContainerResources != nil {
+			resourceV1, err := V1alpha2ToV1(transferToCRIV1alpha2Resources(c.ContainerResources))
+			if err != nil {
+				return err
+			}
+			request.Config.Linux.Resources = resourceV1.(*v1.LinuxContainerResources)
+		}
+		if c.PodCgroupParent != "" {
+			request.SandboxConfig.Linux.CgroupParent = c.PodCgroupParent
+		}
+		request.Config.Envs = transferToCRIV1ContainerEnvs(c.ContainerEnvs)
+	case *v1.UpdateContainerResourcesRequest:
+		if c.ContainerAnnotations != nil {
+			request.Annotations = c.ContainerAnnotations
+		}
+		if c.ContainerResources != nil {
+			resourceV1, err := V1alpha2ToV1(transferToCRIV1alpha2Resources(c.ContainerResources))
+			if err != nil {
+				return err
+			}
+			request.Linux = resourceV1.(*v1.LinuxContainerResources)
 		}
 	}
 	return nil

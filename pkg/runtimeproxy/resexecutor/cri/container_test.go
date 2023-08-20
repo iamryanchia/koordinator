@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
 
 	"github.com/koordinator-sh/koordinator/apis/runtime/v1alpha1"
 	"github.com/koordinator-sh/koordinator/pkg/runtimeproxy/store"
@@ -41,7 +41,7 @@ func TestContainerResourceExecutor_UpdateRequestForCreateContainerRequest(t *tes
 		fields              fields
 		args                args
 		wantAnnotations     map[string]string
-		wantResource        *runtimeapi.LinuxContainerResources
+		wantResource        *v1.LinuxContainerResources
 		wantPodCgroupParent string
 		wantErr             bool
 	}{
@@ -49,7 +49,7 @@ func TestContainerResourceExecutor_UpdateRequestForCreateContainerRequest(t *tes
 			name: "not compatible rsp type",
 			args: args{
 				rsp: &v1alpha1.PodSandboxHookResponse{},
-				req: &runtimeapi.CreateContainerRequest{},
+				req: &v1.CreateContainerRequest{},
 			},
 			wantAnnotations:     nil,
 			wantResource:        nil,
@@ -77,12 +77,12 @@ func TestContainerResourceExecutor_UpdateRequestForCreateContainerRequest(t *tes
 				},
 			},
 			args: args{
-				req: &runtimeapi.CreateContainerRequest{
-					Config: &runtimeapi.ContainerConfig{
-						Linux: &runtimeapi.LinuxContainerConfig{},
+				req: &v1.CreateContainerRequest{
+					Config: &v1.ContainerConfig{
+						Linux: &v1.LinuxContainerConfig{},
 					},
-					SandboxConfig: &runtimeapi.PodSandboxConfig{
-						Linux: &runtimeapi.LinuxPodSandboxConfig{},
+					SandboxConfig: &v1.PodSandboxConfig{
+						Linux: &v1.LinuxPodSandboxConfig{},
 					},
 				},
 				rsp: &v1alpha1.ContainerResourceHookResponse{
@@ -101,7 +101,7 @@ func TestContainerResourceExecutor_UpdateRequestForCreateContainerRequest(t *tes
 				},
 			},
 			wantErr: false,
-			wantResource: &runtimeapi.LinuxContainerResources{
+			wantResource: &v1.LinuxContainerResources{
 				CpuPeriod:   2000,
 				CpuShares:   100,
 				OomScoreAdj: 20,
@@ -123,9 +123,9 @@ func TestContainerResourceExecutor_UpdateRequestForCreateContainerRequest(t *tes
 		}
 		err := c.UpdateRequest(tt.args.rsp, tt.args.req)
 		assert.Equal(t, tt.wantErr, err != nil, err)
-		assert.Equal(t, tt.wantResource, tt.args.req.(*runtimeapi.CreateContainerRequest).GetConfig().GetLinux().GetResources())
-		assert.Equal(t, tt.wantAnnotations, tt.args.req.(*runtimeapi.CreateContainerRequest).GetConfig().GetAnnotations())
-		assert.Equal(t, tt.wantPodCgroupParent, tt.args.req.(*runtimeapi.CreateContainerRequest).GetSandboxConfig().GetLinux().GetCgroupParent())
+		assert.Equal(t, tt.wantResource, tt.args.req.(*v1.CreateContainerRequest).GetConfig().GetLinux().GetResources())
+		assert.Equal(t, tt.wantAnnotations, tt.args.req.(*v1.CreateContainerRequest).GetConfig().GetAnnotations())
+		assert.Equal(t, tt.wantPodCgroupParent, tt.args.req.(*v1.CreateContainerRequest).GetSandboxConfig().GetLinux().GetCgroupParent())
 	}
 }
 
@@ -142,14 +142,14 @@ func TestContainerResourceExecutor_UpdateRequestForUpdateContainerResourcesReque
 		fields          fields
 		args            args
 		wantAnnotations map[string]string
-		wantResource    *runtimeapi.LinuxContainerResources
+		wantResource    *v1.LinuxContainerResources
 		wantErr         bool
 	}{
 		{
 			name: "not compatible rsp type",
 			args: args{
 				rsp: &v1alpha1.PodSandboxHookResponse{},
-				req: &runtimeapi.UpdateContainerResourcesRequest{},
+				req: &v1.UpdateContainerResourcesRequest{},
 			},
 			wantAnnotations: nil,
 			wantResource:    nil,
@@ -176,8 +176,8 @@ func TestContainerResourceExecutor_UpdateRequestForUpdateContainerResourcesReque
 				},
 			},
 			args: args{
-				req: &runtimeapi.UpdateContainerResourcesRequest{
-					Linux: &runtimeapi.LinuxContainerResources{},
+				req: &v1.UpdateContainerResourcesRequest{
+					Linux: &v1.LinuxContainerResources{},
 				},
 				rsp: &v1alpha1.ContainerResourceHookResponse{
 					ContainerAnnotations: map[string]string{
@@ -195,7 +195,7 @@ func TestContainerResourceExecutor_UpdateRequestForUpdateContainerResourcesReque
 				},
 			},
 			wantErr: false,
-			wantResource: &runtimeapi.LinuxContainerResources{
+			wantResource: &v1.LinuxContainerResources{
 				CpuPeriod:   2000,
 				CpuShares:   100,
 				OomScoreAdj: 20,
@@ -216,8 +216,8 @@ func TestContainerResourceExecutor_UpdateRequestForUpdateContainerResourcesReque
 		}
 		err := c.UpdateRequest(tt.args.rsp, tt.args.req)
 		assert.Equal(t, tt.wantErr, err != nil, err)
-		assert.Equal(t, tt.wantResource, tt.args.req.(*runtimeapi.UpdateContainerResourcesRequest).GetLinux())
-		assert.Equal(t, tt.wantAnnotations, tt.args.req.(*runtimeapi.UpdateContainerResourcesRequest).GetAnnotations())
+		assert.Equal(t, tt.wantResource, tt.args.req.(*v1.UpdateContainerResourcesRequest).GetLinux())
+		assert.Equal(t, tt.wantAnnotations, tt.args.req.(*v1.UpdateContainerResourcesRequest).GetAnnotations())
 	}
 }
 
@@ -238,7 +238,7 @@ func TestContainerResourceExecutor_ResourceCheckPoint(t *testing.T) {
 		{
 			name: "normal case - CreateContainerResponse - Set Container id successfully",
 			args: args{
-				rsp: &runtimeapi.CreateContainerResponse{
+				rsp: &v1.CreateContainerResponse{
 					ContainerId: "111111",
 				},
 			},
@@ -283,9 +283,9 @@ func TestContainerResourceExecutor_ParseRequest_CreateContainerRequest(t *testin
 		{
 			name: "normal case",
 			args: args{
-				podReq: &runtimeapi.RunPodSandboxRequest{
-					Config: &runtimeapi.PodSandboxConfig{
-						Metadata: &runtimeapi.PodSandboxMetadata{
+				podReq: &v1.RunPodSandboxRequest{
+					Config: &v1.PodSandboxConfig{
+						Metadata: &v1.PodSandboxMetadata{
 							Name:      "mock pod sandbox",
 							Namespace: "mock namespace",
 							Uid:       "202207121604",
@@ -296,15 +296,15 @@ func TestContainerResourceExecutor_ParseRequest_CreateContainerRequest(t *testin
 						Labels: map[string]string{
 							"label.dummy.koordinator.sh/TestContainerResourceExecutor_ParseRequest_CreateContainerRequest_Pod": "true",
 						},
-						Linux: &runtimeapi.LinuxPodSandboxConfig{
+						Linux: &v1.LinuxPodSandboxConfig{
 							CgroupParent: "/kubepods/besteffort",
 						},
 					},
 				},
-				containerReq: &runtimeapi.CreateContainerRequest{
+				containerReq: &v1.CreateContainerRequest{
 					PodSandboxId: "202207121604",
-					Config: &runtimeapi.ContainerConfig{
-						Metadata: &runtimeapi.ContainerMetadata{
+					Config: &v1.ContainerConfig{
+						Metadata: &v1.ContainerMetadata{
 							Name:    "test container",
 							Attempt: 101010,
 						},
@@ -314,8 +314,8 @@ func TestContainerResourceExecutor_ParseRequest_CreateContainerRequest(t *testin
 						Labels: map[string]string{
 							"label.dummy.koordinator.sh/TestContainerResourceExecutor_ParseRequest_CreateContainerRequest_Container": "true",
 						},
-						Linux: &runtimeapi.LinuxContainerConfig{
-							Resources: &runtimeapi.LinuxContainerResources{
+						Linux: &v1.LinuxContainerConfig{
+							Resources: &v1.LinuxContainerResources{
 								CpuPeriod:   1000,
 								CpuShares:   500,
 								OomScoreAdj: 10,
@@ -325,8 +325,8 @@ func TestContainerResourceExecutor_ParseRequest_CreateContainerRequest(t *testin
 							},
 						},
 					},
-					SandboxConfig: &runtimeapi.PodSandboxConfig{
-						Linux: &runtimeapi.LinuxPodSandboxConfig{
+					SandboxConfig: &v1.PodSandboxConfig{
+						Linux: &v1.LinuxPodSandboxConfig{
 							CgroupParent: "/kubepods/besteffort",
 						},
 					},
@@ -399,9 +399,9 @@ func TestContainerResourceExecutor_ParseRequest_UpdateContainerResourcesRequest(
 			name: "normal case",
 			args: args{
 				containerID: "10101010",
-				containerReq: &runtimeapi.UpdateContainerResourcesRequest{
+				containerReq: &v1.UpdateContainerResourcesRequest{
 					ContainerId: "10101010",
-					Linux: &runtimeapi.LinuxContainerResources{
+					Linux: &v1.LinuxContainerResources{
 						CpusetCpus: "0-31",
 					},
 				},
@@ -473,19 +473,19 @@ func TestContainerResourceExecutor_ParseRequest_UpdateContainerResourcesRequest(
 func TestContainerResourceExecutor_ParseContainer(t *testing.T) {
 	tests := []struct {
 		name              string
-		container         *runtimeapi.Container
+		container         *v1.Container
 		podSandboxID      string
 		pod               *store.PodSandboxInfo // this is the pod in store belonging to this container
 		containerInternal *store.ContainerInfo
 	}{
 		{
 			name: "container failover normal",
-			container: &runtimeapi.Container{
+			container: &v1.Container{
 				PodSandboxId: "podSandboxID0",
 				Annotations: map[string]string{
 					"containerAnnotationKey1": "containerAnnotationValue1",
 				},
-				Metadata: &runtimeapi.ContainerMetadata{
+				Metadata: &v1.ContainerMetadata{
 					Name:    "container",
 					Attempt: 2,
 				},

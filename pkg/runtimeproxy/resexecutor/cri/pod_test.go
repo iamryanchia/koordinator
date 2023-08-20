@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
 
 	"github.com/koordinator-sh/koordinator/apis/runtime/v1alpha1"
 	"github.com/koordinator-sh/koordinator/pkg/runtimeproxy/store"
@@ -28,7 +28,7 @@ import (
 
 func TestPodResourceExecutor_ParsePod(t *testing.T) {
 	type fields struct {
-		podSandbox *runtimeapi.PodSandbox
+		podSandbox *v1.PodSandbox
 	}
 	type want struct {
 		wantErr               error
@@ -54,8 +54,8 @@ func TestPodResourceExecutor_ParsePod(t *testing.T) {
 		{
 			name: "normal parse error",
 			fields: fields{
-				podSandbox: &runtimeapi.PodSandbox{
-					Metadata: &runtimeapi.PodSandboxMetadata{
+				podSandbox: &v1.PodSandbox{
+					Metadata: &v1.PodSandboxMetadata{
 						Name:      "TestPodName",
 						Namespace: "TestPodNamespace",
 						Uid:       "TestPodUid",
@@ -124,7 +124,7 @@ func TestPodResourceExecutor_ResourceCheckPoint(t *testing.T) {
 		},
 		{
 			name: "response is is RunPodSandboxResponse, should store podinfo",
-			responseFromContainerd: &runtimeapi.RunPodSandboxResponse{
+			responseFromContainerd: &v1.RunPodSandboxResponse{
 				PodSandboxId: podID,
 			},
 			podSandboxForThisPod: &store.PodSandboxInfo{
@@ -144,7 +144,7 @@ func TestPodResourceExecutor_ResourceCheckPoint(t *testing.T) {
 		},
 		{
 			name: "response is is not RunPodSandboxResponse, should not store podinfo",
-			responseFromContainerd: &runtimeapi.StopPodSandboxRequest{
+			responseFromContainerd: &v1.StopPodSandboxRequest{
 				PodSandboxId: podID,
 			},
 			podSandboxForThisPod: &store.PodSandboxInfo{
@@ -189,7 +189,7 @@ func TestPodResourceExecutor_UpdateRequestForRunPodSandboxRequest(t *testing.T) 
 			name: "not compatible rsp type",
 			args: args{
 				rsp: &v1alpha1.ContainerResourceHookResponse{},
-				req: &runtimeapi.RunPodSandboxRequest{},
+				req: &v1.RunPodSandboxRequest{},
 			},
 			wantAnnotations:  nil,
 			wantLabels:       nil,
@@ -212,9 +212,9 @@ func TestPodResourceExecutor_UpdateRequestForRunPodSandboxRequest(t *testing.T) 
 				},
 			},
 			args: args{
-				req: &runtimeapi.RunPodSandboxRequest{
-					Config: &runtimeapi.PodSandboxConfig{
-						Linux: &runtimeapi.LinuxPodSandboxConfig{},
+				req: &v1.RunPodSandboxRequest{
+					Config: &v1.PodSandboxConfig{
+						Linux: &v1.LinuxPodSandboxConfig{},
 					},
 				},
 				rsp: &v1alpha1.PodSandboxHookResponse{
@@ -246,8 +246,8 @@ func TestPodResourceExecutor_UpdateRequestForRunPodSandboxRequest(t *testing.T) 
 		}
 		err := p.UpdateRequest(tt.args.rsp, tt.args.req)
 		assert.Equal(t, tt.wantErr, err != nil, err)
-		assert.Equal(t, tt.wantAnnotations, tt.args.req.(*runtimeapi.RunPodSandboxRequest).GetConfig().GetAnnotations())
-		assert.Equal(t, tt.wantLabels, tt.args.req.(*runtimeapi.RunPodSandboxRequest).GetConfig().GetLabels())
-		assert.Equal(t, tt.wantCgroupParent, tt.args.req.(*runtimeapi.RunPodSandboxRequest).GetConfig().GetLinux().GetCgroupParent())
+		assert.Equal(t, tt.wantAnnotations, tt.args.req.(*v1.RunPodSandboxRequest).GetConfig().GetAnnotations())
+		assert.Equal(t, tt.wantLabels, tt.args.req.(*v1.RunPodSandboxRequest).GetConfig().GetLabels())
+		assert.Equal(t, tt.wantCgroupParent, tt.args.req.(*v1.RunPodSandboxRequest).GetConfig().GetLinux().GetCgroupParent())
 	}
 }

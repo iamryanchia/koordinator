@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Koordinator Authors.
+Copyright 2023 The Koordinator Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,4 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cri
+package interceptor
+
+type ServiceType int
+type RuntimeServiceType int
+type ImageServiceType int
+
+const (
+	RuntimeService ServiceType = iota
+	ImageService
+)
+
+const (
+	RunPodSandbox RuntimeServiceType = iota
+	StopPodSandbox
+	CreateContainer
+	StartContainer
+	StopContainer
+	RemoveContainer
+	UpdateContainerResources
+)

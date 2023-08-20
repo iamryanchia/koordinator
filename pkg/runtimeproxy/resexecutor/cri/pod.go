@@ -21,7 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
+	v1alpha2 "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 	"k8s.io/klog/v2"
 
 	"github.com/koordinator-sh/koordinator/apis/runtime/v1alpha1"
@@ -62,9 +63,13 @@ func (p *PodResourceExecutor) loadPodSandboxFromStore(podID string) error {
 
 // ParseRequest would
 func (p *PodResourceExecutor) ParseRequest(req interface{}) (utils.CallHookPluginOperation, error) {
-	var err error
+	req, err := V1alpha2ToV1(req)
+	if err != nil {
+		return utils.Unknown, err
+	}
+
 	switch request := req.(type) {
-	case *runtimeapi.RunPodSandboxRequest:
+	case *v1.RunPodSandboxRequest:
 		p.PodSandboxInfo = store.PodSandboxInfo{
 			PodSandboxHookRequest: &v1alpha1.PodSandboxHookRequest{
 				PodMeta: &v1alpha1.PodSandboxMetadata{
@@ -79,7 +84,7 @@ func (p *PodResourceExecutor) ParseRequest(req interface{}) (utils.CallHookPlugi
 			},
 		}
 		klog.Infof("success parse pod Info %v during pod run", p)
-	case *runtimeapi.StopPodSandboxRequest:
+	case *v1.StopPodSandboxRequest:
 		err = p.loadPodSandboxFromStore(request.GetPodSandboxId())
 	}
 	if err != nil {
@@ -92,7 +97,7 @@ func (p *PodResourceExecutor) ParseRequest(req interface{}) (utils.CallHookPlugi
 	return utils.ShouldCallHookPlugin, nil
 }
 
-func (p *PodResourceExecutor) ParsePod(podsandbox *runtimeapi.PodSandbox) error {
+func (p *PodResourceExecutor) ParsePod(podsandbox *v1.PodSandbox) error {
 	if p == nil || podsandbox == nil {
 		return nil
 	}
@@ -113,11 +118,16 @@ func (p *PodResourceExecutor) ParsePod(podsandbox *runtimeapi.PodSandbox) error 
 }
 
 func (p *PodResourceExecutor) ResourceCheckPoint(response interface{}) error {
-	runPodSandboxResponse, ok := response.(*runtimeapi.RunPodSandboxResponse)
+	response, err := V1alpha2ToV1(response)
+	if err != nil {
+		return err
+	}
+
+	runPodSandboxResponse, ok := response.(*v1.RunPodSandboxResponse)
 	if !ok || p.GetPodSandboxHookRequest() == nil {
 		return fmt.Errorf("no need to checkpoint resource %v %v", response, p.GetPodSandboxHookRequest())
 	}
-	err := store.WritePodSandboxInfo(runPodSandboxResponse.PodSandboxId, &p.PodSandboxInfo)
+	err = store.WritePodSandboxInfo(runPodSandboxResponse.PodSandboxId, &p.PodSandboxInfo)
 	if err != nil {
 		return err
 	}
@@ -128,8 +138,13 @@ func (p *PodResourceExecutor) ResourceCheckPoint(response interface{}) error {
 }
 
 func (p *PodResourceExecutor) DeleteCheckpointIfNeed(req interface{}) error {
+	req, err := V1alpha2ToV1(req)
+	if err != nil {
+		return err
+	}
+
 	switch request := req.(type) {
-	case *runtimeapi.StopPodSandboxRequest:
+	case *v1.StopPodSandboxRequest:
 		store.DeletePodSandboxInfo(request.GetPodSandboxId())
 	}
 	return nil
@@ -149,7 +164,17 @@ func (p *PodResourceExecutor) UpdateRequest(rsp interface{}, req interface{}) er
 	}
 	// update CRI request
 	switch request := req.(type) {
-	case *runtimeapi.RunPodSandboxRequest:
+	case *v1alpha2.RunPodSandboxRequest:
+		if p.Annotations != nil {
+			request.Config.Annotations = p.Annotations
+		}
+		if p.Labels != nil {
+			request.Config.Labels = p.Labels
+		}
+		if p.CgroupParent != "" {
+			request.Config.Linux.CgroupParent = p.CgroupParent
+		}
+	case *v1.RunPodSandboxRequest:
 		if p.Annotations != nil {
 			request.Config.Annotations = p.Annotations
 		}

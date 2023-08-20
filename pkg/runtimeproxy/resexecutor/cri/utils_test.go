@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"
+	v1alpha2 "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
 	"github.com/koordinator-sh/koordinator/apis/runtime/v1alpha1"
 )
@@ -100,7 +100,7 @@ func Test_updateResource(t *testing.T) {
 
 func Test_transferToKoordResources(t *testing.T) {
 	type args struct {
-		r *runtimeapi.LinuxContainerResources
+		r *v1.LinuxContainerResources
 	}
 	tests := []struct {
 		name string
@@ -110,7 +110,7 @@ func Test_transferToKoordResources(t *testing.T) {
 		{
 			name: "normal case",
 			args: args{
-				r: &runtimeapi.LinuxContainerResources{
+				r: &v1.LinuxContainerResources{
 					CpuPeriod:   1000,
 					CpuShares:   500,
 					OomScoreAdj: 10,
@@ -142,7 +142,7 @@ func Test_transferToCRIResources(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *runtimeapi.LinuxContainerResources
+		want *v1.LinuxContainerResources
 	}{
 		{
 			name: "normal case",
@@ -156,7 +156,7 @@ func Test_transferToCRIResources(t *testing.T) {
 					},
 				},
 			},
-			want: &runtimeapi.LinuxContainerResources{
+			want: &v1.LinuxContainerResources{
 				CpuPeriod:   1000,
 				CpuShares:   500,
 				OomScoreAdj: 10,
@@ -167,7 +167,7 @@ func Test_transferToCRIResources(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		gotResources := transferToCRIResources(tt.args.r)
+		gotResources := transferToCRIV1alpha2Resources(tt.args.r)
 		assert.Equal(t, tt.want, gotResources)
 	}
 }
@@ -246,7 +246,7 @@ func Test_updateResourceByUpdateContainerResourceRequest(t *testing.T) {
 func Test_transferToKoordContainerEnvs(t *testing.T) {
 	tests := []struct {
 		name            string
-		containerdEnvs  []*runtimeapi.KeyValue
+		containerdEnvs  []*v1.KeyValue
 		expectKoordEnvs map[string]string
 	}{
 		{
@@ -256,12 +256,12 @@ func Test_transferToKoordContainerEnvs(t *testing.T) {
 		},
 		{
 			name:            "containerdEnvs is not nil but with 0 item",
-			containerdEnvs:  []*runtimeapi.KeyValue{},
+			containerdEnvs:  []*v1.KeyValue{},
 			expectKoordEnvs: map[string]string{},
 		},
 		{
 			name: "normal case with 1 item",
-			containerdEnvs: []*runtimeapi.KeyValue{
+			containerdEnvs: []*v1.KeyValue{
 				{
 					Key:   "key1",
 					Value: "value1",
@@ -273,7 +273,7 @@ func Test_transferToKoordContainerEnvs(t *testing.T) {
 		},
 		{
 			name: "normal case with multi item",
-			containerdEnvs: []*runtimeapi.KeyValue{
+			containerdEnvs: []*v1.KeyValue{
 				{
 					Key:   "key1",
 					Value: "value1",
@@ -300,7 +300,7 @@ func Test_transferToCRIContainerEnvs(t *testing.T) {
 	tests := []struct {
 		name                   string
 		koordEnvs              map[string]string
-		expectedContainerdEnvs []*runtimeapi.KeyValue
+		expectedContainerdEnvs []*v1.KeyValue
 	}{
 		{
 			name:                   "koordEnvs is nil, should return nil",
@@ -317,7 +317,7 @@ func Test_transferToCRIContainerEnvs(t *testing.T) {
 			koordEnvs: map[string]string{
 				"key1": "value1",
 			},
-			expectedContainerdEnvs: []*runtimeapi.KeyValue{
+			expectedContainerdEnvs: []*v1.KeyValue{
 				{
 					Key:   "key1",
 					Value: "value1",
@@ -330,7 +330,7 @@ func Test_transferToCRIContainerEnvs(t *testing.T) {
 				"key1": "value1",
 				"key2": "value2",
 			},
-			expectedContainerdEnvs: []*runtimeapi.KeyValue{
+			expectedContainerdEnvs: []*v1.KeyValue{
 				{
 					Key:   "key1",
 					Value: "value1",
@@ -344,7 +344,7 @@ func Test_transferToCRIContainerEnvs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		realContainerdEnvs := transferToCRIContainerEnvs(tt.koordEnvs)
+		realContainerdEnvs := transferToCRIV1alpha2ContainerEnvs(tt.koordEnvs)
 		sort.Slice(realContainerdEnvs, func(i, j int) bool {
 			return strings.Compare(realContainerdEnvs[i].GetKey(), realContainerdEnvs[j].GetKey()) > 0
 		})
@@ -352,5 +352,195 @@ func Test_transferToCRIContainerEnvs(t *testing.T) {
 			return strings.Compare(tt.expectedContainerdEnvs[i].GetKey(), tt.expectedContainerdEnvs[j].GetKey()) > 0
 		})
 		assert.Equalf(t, realContainerdEnvs, tt.expectedContainerdEnvs, tt.name)
+	}
+}
+
+func Test_IsV1Type(t *testing.T) {
+	type args struct {
+		in interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "v1 type",
+			args: args{in: v1.AttachRequest{}},
+			want: true,
+		},
+		{
+			name: "v1 pointer type",
+			args: args{in: &v1.AttachRequest{}},
+			want: true,
+		},
+		{
+			name: "v1alpha2 type",
+			args: args{in: v1alpha2.AttachRequest{}},
+			want: false,
+		},
+		{
+			name: "v1alpha2 pointer type",
+			args: args{in: &v1alpha2.AttachRequest{}},
+			want: false,
+		},
+		{
+			name: "nil",
+			args: args{in: nil},
+			want: false,
+		},
+		{
+			name: "nil with v1 type",
+			args: args{in: (*v1.AttachRequest)(nil)},
+			want: true,
+		},
+		{
+			name: "cutom type",
+			args: args{in: struct{}{}},
+			want: false,
+		},
+		{
+			name: "cutom pointer type",
+			args: args{in: &struct{}{}},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsV1Type(tt.args.in)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_IsV1alpha2Type(t *testing.T) {
+	type args struct {
+		in interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "v1 type",
+			args: args{in: v1.AttachRequest{}},
+			want: false,
+		},
+		{
+			name: "v1 pointer type",
+			args: args{in: &v1.AttachRequest{}},
+			want: false,
+		},
+		{
+			name: "v1alpha2 type",
+			args: args{in: v1alpha2.AttachRequest{}},
+			want: true,
+		},
+		{
+			name: "v1alpha2 pointer type",
+			args: args{in: &v1alpha2.AttachRequest{}},
+			want: true,
+		},
+		{
+			name: "nil",
+			args: args{in: nil},
+			want: false,
+		},
+		{
+			name: "nil with v1alpha2 type",
+			args: args{in: (*v1alpha2.AttachRequest)(nil)},
+			want: true,
+		},
+		{
+			name: "cutom type",
+			args: args{in: struct{}{}},
+			want: false,
+		},
+		{
+			name: "cutom pointer type",
+			args: args{in: &struct{}{}},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsV1alpha2Type(tt.args.in)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_V1alpha2ToV1(t *testing.T) {
+	type args struct {
+		in interface{}
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    interface{}
+		wantErr bool
+	}{
+		{
+			name:    "v1 type",
+			args:    args{in: v1.AttachRequest{}},
+			want:    v1.AttachRequest{},
+			wantErr: false,
+		},
+		{
+			name:    "v1 pointer type",
+			args:    args{in: &v1.AttachRequest{}},
+			want:    &v1.AttachRequest{},
+			wantErr: false,
+		},
+		{
+			name:    "v1alpha2 type",
+			args:    args{in: v1alpha2.AttachRequest{}},
+			want:    v1alpha2.AttachRequest{},
+			wantErr: true,
+		},
+		{
+			name:    "v1alpha2 pointer type",
+			args:    args{in: &v1alpha2.AttachRequest{}},
+			want:    &v1.AttachRequest{},
+			wantErr: false,
+		},
+		{
+			name:    "nil",
+			args:    args{in: nil},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "nil with v1 type",
+			args:    args{in: (*v1.AttachRequest)(nil)},
+			want:    (*v1.AttachRequest)(nil),
+			wantErr: false,
+		},
+		{
+			name:    "nil with v1alpha2 type",
+			args:    args{in: (*v1alpha2.AttachRequest)(nil)},
+			want:    (*v1.AttachRequest)(nil),
+			wantErr: false,
+		},
+		{
+			name:    "cutom type",
+			args:    args{in: struct{}{}},
+			want:    struct{}{},
+			wantErr: true,
+		},
+		{
+			name:    "cutom pointer type",
+			args:    args{in: &struct{}{}},
+			want:    &struct{}{},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := V1alpha2ToV1(tt.args.in)
+			assert.Equal(t, tt.wantErr, err != nil, err)
+			assert.IsType(t, tt.want, got)
+		})
 	}
 }
